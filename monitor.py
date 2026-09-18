@@ -6,9 +6,15 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 WEBHOOK = os.environ.get("DISCORD_WEBHOOK")
 
 TELEGRAM_URL = "https://t.me/s/escapefromtarkovEN"
+
 STATE_FILE = "status.json"
 
 HEADERS = {
@@ -19,11 +25,18 @@ HEADERS = {
 }
 
 
+# ============================================================
+# LOAD / SAVE MONITOR STATE
+# ============================================================
+
 def load_state():
+
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
+
     except (FileNotFoundError, json.JSONDecodeError):
+
         return {
             "last_message_hash": "",
             "initialized": False
@@ -31,11 +44,22 @@ def load_state():
 
 
 def save_state(state):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
 
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+
+        json.dump(
+            state,
+            f,
+            indent=2
+        )
+
+
+# ============================================================
+# READ OFFICIAL TARKOV TELEGRAM
+# ============================================================
 
 def get_official_posts():
+
     response = requests.get(
         TELEGRAM_URL,
         headers=HEADERS,
@@ -44,11 +68,16 @@ def get_official_posts():
 
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
 
     posts = []
 
-    for message in soup.select(".tgme_widget_message_wrap"):
+    for message in soup.select(
+        ".tgme_widget_message_wrap"
+    ):
 
         text_element = message.select_one(
             ".tgme_widget_message_text"
@@ -69,7 +98,11 @@ def get_official_posts():
         link = ""
 
         if link_element:
-            link = link_element.get("href", "")
+
+            link = link_element.get(
+                "href",
+                ""
+            )
 
         posts.append({
             "text": text,
@@ -79,16 +112,22 @@ def get_official_posts():
     return posts
 
 
+# ============================================================
+# CLASSIFY TARKOV ANNOUNCEMENTS
+# ============================================================
+
 def classify_post(text):
 
     lower = text.lower()
 
     # Only Escape from Tarkov.
     # Ignore Arena-only announcements.
+
     if "#escapefromtarkov" not in lower:
         return None
 
-    # Ignore website/account-center maintenance.
+    # Ignore website / account-center maintenance.
+
     if (
         "website" in lower
         or "account center" in lower
@@ -102,112 +141,187 @@ def classify_post(text):
         "installation"
     ]
 
-    if not any(word in lower for word in maintenance_words):
+    if not any(
+        word in lower
+        for word in maintenance_words
+    ):
         return None
 
-    # COMPLETED
-    if any(word in lower for word in [
-        "is complete",
-        "has been completed",
-        "installation is complete",
-        "installation in #escapefromtarkov is complete"
-    ]):
+    # --------------------------------------------------------
+    # COMPLETE
+    # --------------------------------------------------------
+
+    if any(
+        word in lower
+        for word in [
+            "is complete",
+            "has been completed",
+            "installation is complete",
+            "installation in #escapefromtarkov is complete"
+        ]
+    ):
         return "COMPLETE"
 
+    # --------------------------------------------------------
     # EXTENDED
-    if any(word in lower for word in [
-        "has been extended",
-        "maintenance extended",
-        "installation has been extended"
-    ]):
+    # --------------------------------------------------------
+
+    if any(
+        word in lower
+        for word in [
+            "has been extended",
+            "maintenance extended",
+            "installation has been extended"
+        ]
+    ):
         return "EXTENDED"
 
+    # --------------------------------------------------------
     # STARTED
-    if any(word in lower for word in [
-        "has begun",
-        "have started",
-        "we have started",
-        "installation has begun"
-    ]):
+    # --------------------------------------------------------
+
+    if any(
+        word in lower
+        for word in [
+            "has begun",
+            "have started",
+            "we have started",
+            "installation has begun"
+        ]
+    ):
         return "STARTED"
 
+    # --------------------------------------------------------
     # PLANNED
-    if any(word in lower for word in [
-        "we are planning",
-        "we plan to",
-        "tomorrow",
-        "will take"
-    ]):
+    # --------------------------------------------------------
+
+    if any(
+        word in lower
+        for word in [
+            "we are planning",
+            "we plan to",
+            "tomorrow",
+            "will take"
+        ]
+    ):
         return "PLANNED"
 
     return None
 
 
+# ============================================================
+# SEND REAL TARKOV ALERT TO DISCORD
+# ============================================================
+
 def discord_message(event, text, link):
 
     now = datetime.now(
         ZoneInfo("Asia/Singapore")
-    ).strftime("%d %b %Y, %I:%M %p")
+    ).strftime(
+        "%d %b %Y, %I:%M %p"
+    )
 
     configs = {
 
         "PLANNED": {
-            "title": "🔵 Tarkov Maintenance Scheduled",
-            "color": 0x3498DB
+            "title":
+                "🔵 Tarkov Maintenance Scheduled",
+
+            "color":
+                0x3498DB
         },
 
         "STARTED": {
-            "title": "🟠 Tarkov Maintenance Started",
-            "color": 0xF39C12
+            "title":
+                "🟠 Tarkov Maintenance Started",
+
+            "color":
+                0xF39C12
         },
 
         "EXTENDED": {
-            "title": "🔴 Tarkov Maintenance Extended",
-            "color": 0xE74C3C
+            "title":
+                "🔴 Tarkov Maintenance Extended",
+
+            "color":
+                0xE74C3C
         },
 
         "COMPLETE": {
-            "title": "🟢 Tarkov Maintenance Complete",
-            "color": 0x2ECC71
+            "title":
+                "🟢 Tarkov Maintenance Complete",
+
+            "color":
+                0x2ECC71
         }
     }
 
     config = configs[event]
 
-    # Prevent giant Discord messages
+    # Prevent Discord message being too large.
+
     if len(text) > 1500:
-        text = text[:1500] + "..."
+
+        text = (
+            text[:1500]
+            + "..."
+        )
 
     payload = {
-        "username": "Tarkov PvE Monitor",
+
+        "username":
+            "Tarkov PvE Monitor",
 
         "embeds": [{
-            "title": config["title"],
 
-            "description": text,
+            "title":
+                config["title"],
 
-            "color": config["color"],
+            "description":
+                text,
+
+            "color":
+                config["color"],
 
             "fields": [
+
                 {
-                    "name": "Game",
-                    "value": "Escape from Tarkov",
-                    "inline": True
+                    "name":
+                        "Game",
+
+                    "value":
+                        "Escape from Tarkov",
+
+                    "inline":
+                        True
                 },
+
                 {
-                    "name": "Mode",
-                    "value": "PvE / EFT Services",
-                    "inline": True
+                    "name":
+                        "Mode",
+
+                    "value":
+                        "PvE / EFT Services",
+
+                    "inline":
+                        True
                 }
+
             ],
 
             "footer": {
-                "text": f"Checked {now} SGT • Official BSG announcement"
+
+                "text":
+                    f"Checked {now} SGT • Official BSG announcement"
+
             }
+
         }]
+
     }
 
     if link:
+
         payload["embeds"][0]["url"] = link
 
     response = requests.post(
@@ -219,9 +333,14 @@ def discord_message(event, text, link):
     response.raise_for_status()
 
 
+# ============================================================
+# NORMAL MONITOR
+# ============================================================
+
 def main():
 
     if not WEBHOOK:
+
         raise RuntimeError(
             "DISCORD_WEBHOOK secret is missing"
         )
@@ -229,12 +348,14 @@ def main():
     state = load_state()
 
     try:
+
         posts = get_official_posts()
 
     except requests.RequestException as error:
 
         print(
-            f"Unable to read official Telegram feed: {error}"
+            "Unable to read official "
+            f"Telegram feed: {error}"
         )
 
         return
@@ -250,20 +371,32 @@ def main():
         if event:
 
             message_hash = hashlib.sha256(
-                post["text"].encode("utf-8")
+                post["text"].encode(
+                    "utf-8"
+                )
             ).hexdigest()
 
             relevant.append({
-                "event": event,
-                "text": post["text"],
-                "link": post["link"],
-                "hash": message_hash
+
+                "event":
+                    event,
+
+                "text":
+                    post["text"],
+
+                "link":
+                    post["link"],
+
+                "hash":
+                    message_hash
+
             })
 
     if not relevant:
 
         print(
-            "No relevant EFT maintenance announcements found."
+            "No relevant EFT maintenance "
+            "announcements found."
         )
 
         return
@@ -271,43 +404,67 @@ def main():
     latest = relevant[-1]
 
     print(
-        f"Latest maintenance event: {latest['event']}"
+        "Latest maintenance event: "
+        f"{latest['event']}"
     )
 
     print(
-        f"Announcement: {latest['text'][:300]}"
+        "Announcement: "
+        f"{latest['text'][:300]}"
     )
 
-    # FIRST RUN:
-    # establish baseline without sending an old alert
-    if not state.get("initialized"):
+    # --------------------------------------------------------
+    # FIRST RUN
+    # --------------------------------------------------------
 
-        print(
-            "First run. Establishing baseline."
-        )
-
-        state["last_message_hash"] = latest["hash"]
-        state["initialized"] = True
-
-        save_state(state)
-
-        return
-
-    # SAME ANNOUNCEMENT
-    if (
-        latest["hash"]
-        == state.get("last_message_hash")
+    if not state.get(
+        "initialized"
     ):
 
         print(
-            "No new maintenance announcement."
+            "First run. "
+            "Establishing baseline."
+        )
+
+        state[
+            "last_message_hash"
+        ] = latest["hash"]
+
+        state[
+            "initialized"
+        ] = True
+
+        save_state(
+            state
         )
 
         return
 
+    # --------------------------------------------------------
+    # NO CHANGE
+    # --------------------------------------------------------
+
+    if (
+        latest["hash"]
+        == state.get(
+            "last_message_hash"
+        )
+    ):
+
+        print(
+            "No new maintenance "
+            "announcement."
+        )
+
+        return
+
+    # --------------------------------------------------------
     # NEW ANNOUNCEMENT
+    # --------------------------------------------------------
+
     print(
-        "New maintenance announcement detected!"
+        "New maintenance "
+        "announcement detected!"
     )
 
     discord_message(
@@ -316,14 +473,124 @@ def main():
         latest["link"]
     )
 
-    state["last_message_hash"] = latest["hash"]
+    state[
+        "last_message_hash"
+    ] = latest["hash"]
 
-    save_state(state)
+    save_state(
+        state
+    )
 
     print(
         "Discord notification sent."
     )
 
 
+# ============================================================
+# DISCORD TEST
+# ============================================================
+
+def send_test():
+
+    if not WEBHOOK:
+
+        raise RuntimeError(
+            "DISCORD_WEBHOOK secret is missing"
+        )
+
+    now = datetime.now(
+        ZoneInfo("Asia/Singapore")
+    ).strftime(
+        "%d %b %Y, %I:%M %p"
+    )
+
+    payload = {
+
+        "username":
+            "Tarkov PvE Monitor",
+
+        "embeds": [{
+
+            "title":
+                "🧪 Tarkov PvE Monitor — Test Successful",
+
+            "description":
+                (
+                    "GitHub Actions monitoring "
+                    "is operational.\n\n"
+                    "Official Escape from Tarkov "
+                    "announcements are being "
+                    "monitored automatically."
+                ),
+
+            "color":
+                0x2ECC71,
+
+            "fields": [
+
+                {
+                    "name":
+                        "Monitoring",
+
+                    "value":
+                        "🟢 Active",
+
+                    "inline":
+                        True
+                },
+
+                {
+                    "name":
+                        "Interval",
+
+                    "value":
+                        "~5 minutes",
+
+                    "inline":
+                        True
+                },
+
+                {
+                    "name":
+                        "Target",
+
+                    "value":
+                        "EFT / PvE maintenance announcements",
+
+                    "inline":
+                        False
+                }
+
+            ],
+
+            "footer": {
+
+                "text":
+                    f"Test performed {now} SGT"
+
+            }
+
+        }]
+
+    }
+
+    response = requests.post(
+        WEBHOOK,
+        json=payload,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    print(
+        "TEST DISCORD NOTIFICATION SENT"
+    )
+
+
+# ============================================================
+# CURRENT MODE: TEST
+# ============================================================
+
 if __name__ == "__main__":
-    main()
+
+    send_test()
