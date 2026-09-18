@@ -493,85 +493,23 @@ def main():
 def send_test():
 
     if not WEBHOOK:
-
         raise RuntimeError(
             "DISCORD_WEBHOOK secret is missing"
         )
 
     now = datetime.now(
         ZoneInfo("Asia/Singapore")
-    ).strftime(
-        "%d %b %Y, %I:%M %p"
-    )
+    ).strftime("%d %b %Y, %I:%M %p")
 
     payload = {
-
-        "username":
-            "Tarkov PvE Monitor",
-
-        "embeds": [{
-
-            "title":
-                "🧪 Tarkov PvE Monitor — Test Successful",
-
-            "description":
-                (
-                    "GitHub Actions monitoring "
-                    "is operational.\n\n"
-                    "Official Escape from Tarkov "
-                    "announcements are being "
-                    "monitored automatically."
-                ),
-
-            "color":
-                0x2ECC71,
-
-            "fields": [
-
-                {
-                    "name":
-                        "Monitoring",
-
-                    "value":
-                        "🟢 Active",
-
-                    "inline":
-                        True
-                },
-
-                {
-                    "name":
-                        "Interval",
-
-                    "value":
-                        "~5 minutes",
-
-                    "inline":
-                        True
-                },
-
-                {
-                    "name":
-                        "Target",
-
-                    "value":
-                        "EFT / PvE maintenance announcements",
-
-                    "inline":
-                        False
-                }
-
-            ],
-
-            "footer": {
-
-                "text":
-                    f"Test performed {now} SGT"
-
-            }
-
-        }]
-
+        "content": (
+            "🧪 **Tarkov PvE Monitor — Test Successful**\n\n"
+            "🟢 GitHub Actions: Online\n"
+            "🟢 Discord Webhook: Connected\n"
+            "🟢 Tarkov Announcement Monitor: Active\n"
+            "⏱️ Check interval: ~5 minutes\n\n"
+            f"Test time: {now} SGT"
+        )
     }
 
     response = requests.post(
@@ -580,11 +518,15 @@ def send_test():
         timeout=30
     )
 
+    # Show Discord's response if it rejects the message.
+    print(f"Discord HTTP status: {response.status_code}")
+
+    if response.status_code >= 400:
+        print(f"Discord response: {response.text}")
+
     response.raise_for_status()
 
-    print(
-        "TEST DISCORD NOTIFICATION SENT"
-    )
+    print("TEST DISCORD NOTIFICATION SENT")
 
 
 # ============================================================
