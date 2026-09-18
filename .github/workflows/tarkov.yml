@@ -34,6 +34,11 @@ jobs:
         run: |
           git config user.name "Tarkov Monitor"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add status.json
-          git diff --cached --quiet || git commit -m "Update Tarkov status"
-          git push
+
+          if [ -f status.json ]; then
+            git add status.json
+            git diff --cached --quiet || git commit -m "Update Tarkov status"
+            git push
+          else
+            echo "status.json was not created - nothing to save."
+          fi
